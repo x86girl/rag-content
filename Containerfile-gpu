@@ -46,7 +46,8 @@ RUN python ./scripts/download_embeddings_model.py \
        -l ./embeddings_model \
        -r ${EMBEDDING_MODEL}
 
-# Reset the entrypoint.
-ENTRYPOINT []
+# Set CLI as the default command
+ENTRYPOINT ["lightspeed-rag"]
+CMD ["--help"]
 
 LABEL description="Contains embedding model and dependencies needed to generate a vector database"

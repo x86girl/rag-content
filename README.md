@@ -5,175 +5,206 @@ It serves as the core framework for Lightspeed-related projects (e.g., OpenShift
 Lightspeed, OpenStack Lightspeed, etc.) to generate their own vector databases
 that can be used for RAG.
 
-## Installing the Python Library
+## Quick Start with CLI
 
-The ``lightspeed_rag_content`` library is not available via pip, but it's included:
-   - in the base [container image](#via-container-image) or
-   - it can be installed [via UV](#via-uv).
+The easiest way to use RAG Content is through the `lightspeed-rag` CLI tool, which provides a simple interface for creating vector stores from JSON and Markdown files.
 
-### Via uv
+### Installation
 
-To install the library via uv, do:
-
-1. Run the command ``uv sync``
-
-    ```bash
-    uv sync
-    ```
-
-2. Test if the library can be imported (expect `lightspeed-rag-content` in the output):
-
-    ```bash
-    uv run python -c "import lightspeed_rag_content; print(lightspeed_rag_content.__name__)"
-    ```
-
-### Via Container Image
-
-The base container image can be manually generated or pulled from a container
-registry.
-
-#### Prebuilt Image
-
-There are prebuilt two images. One with CPU support only (size cca 3.7 GB) and image with GPU support with CUDA support (size cca 12 GB).
-
-1. Pull the CPU variant:
-
-    ```bash
-    podman pull quay.io/lightspeed-core/rag-content-cpu:latest
-    ```
-
-2. Pull the GPU variant:
-
-    ```bash
-    podman pull quay.io/lightspeed-core/rag-content-gpu:latest
-    ```
-
-#### Official image
-
-An official image is available on https://catalog.redhat.com/en/software/containers/explore
-It is needed search for "Lightspeed RAG Tool" in the catalog.
-
-A Red Hat official image can be retrieved using the following command:
+#### Via uv (Recommended for Development)
 
 ```bash
+# Clone the repository
+git clone https://github.com/lightspeed-core/rag-content.git
+cd rag-content
+
+# Install dependencies
+uv sync
+
+# Test the CLI
+uv run lightspeed-rag --help
+```
+
+#### Via Container Image (Recommended for Production)
+
+Pull a prebuilt image:
+
+```bash
+# CPU variant (size ~3.7 GB)
+podman pull quay.io/lightspeed-core/rag-content-cpu:latest
+
+# GPU variant with CUDA support (size ~12 GB)
+podman pull quay.io/lightspeed-core/rag-content-gpu:latest
+
+# Run the CLI from the container
+podman run --rm quay.io/lightspeed-core/rag-content-cpu:latest --help
+```
+
+Official Red Hat image:
+
+```bash
+# Login to Red Hat registry
+podman login registry.redhat.io
+
+# Pull the official image
 podman pull registry.redhat.io/lightspeed-core/rag-tool-rhel9
+
+# Run the CLI
+podman run --rm registry.redhat.io/lightspeed-core/rag-tool-rhel9 --help
 ```
 
-NOTE: you need to register to RH registry first. Run the following command, then enter your registry token credentials when prompted by the terminal.
+### Basic Usage
+
+#### Create Vector Store from Markdown Files
 
 ```bash
-$ podman login registry.redhat.io
+lightspeed-rag \
+    --input ./docs \
+    --output ./vector_store \
+    --index-id my-docs \
+    --model sentence-transformers/all-mpnet-base-v2
 ```
 
-#### Build image locally
+#### Create Vector Store from JSON File
 
-To build the image locally, follow these steps:
+```bash
+lightspeed-rag \
+    --input ./documents.json \
+    --input-format json \
+    --output ./vector_store \
+    --index-id my-docs \
+    --model sentence-transformers/all-mpnet-base-v2
+```
 
-1. Install the requirements: `make` and `podman`.
-2. Generate the container image:
+#### Using the Container Image
 
-    ```bash
-    podman build -t localhost/lightspeed-rag-content-cpu:latest .
-    ```
+```bash
+# Prepare your documents
+mkdir -p ./custom_docs/0.1
+echo "Vector Database is an efficient way to provide information to LLM" > ./custom_docs/0.1/info.txt
 
-3. The `lightspeed_rag_content` and its dependencies will be installed in the
-image (expect `lightspeed-rag-content` in the output):
-    ```bash
-    podman run localhost/lightspeed-rag-content-cpu:latest python -c "import lightspeed_rag_content; print(lightspeed_rag_content.__name__)"
-    ```
+# Run the CLI from the container
+podman run --rm \
+    -v ./custom_docs:/input:Z \
+    -v ./vector_store:/output:Z \
+    quay.io/lightspeed-core/rag-content-cpu:latest \
+    --input /input/0.1 \
+    --output /output \
+    --index-id custom-docs-0_1 \
+    --model sentence-transformers/all-mpnet-base-v2
+```
 
+### CLI Options
 
-## Generating the Vector Database
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --input` | Input directory (markdown) or file (JSON) | Required |
+| `-o, --output` | Output directory for vector store | Required |
+| `--index-id` | Unique identifier for the vector store | Required |
+| `-m, --model` | Embedding model name (HuggingFace repo ID) | Required |
+| `--input-format` | Input format: `markdown` or `json` | `markdown` |
+| `--model-dir` | Directory containing embedding model | `embeddings_model` |
+| `--chunk-size` | Chunk size for text splitting | `512` |
+| `--chunk-overlap` | Overlap between chunks | `128` |
+| `--workers` | Number of parallel workers | `4` |
+| `--vector-store-type` | Vector store type (faiss, postgres, llamastack-*) | `faiss` |
+| `--base-url` | Base URL for document links | `https://docs.redhat.com` |
+| `--hermetic` | Disable URL reachability checks | `false` |
+| `-v, --verbose` | Enable verbose output | `false` |
 
-You can generate the vector database either using
+For more detailed CLI documentation, see [CLI_README.md](CLI_README.md).
 
-1. [Llama-Index Faiss Vector Store](#faiss-vector-store)
-2. [Llama-Index Postgres (PGVector) Vector Store](#postgres-pgvector-vector-store)
-3. [Llama-Stack Faiss Vector-IO](#llama-stack-faiss)
-4. [Llama-Stack SQLite-vec Vector-IO](#llama-stack-sqlite-vec)
-5. [Llama-Stack Postgres (PGVector) Vector Store](#llama-stack-postgres-pgvector-vector-store)
+## JSON Input Format
 
-Llama-Index approaches require you to download the embedding model, and we also
-recommend it for Llama-Stack targets even though it should work even without
-manually downloading the model, model-download.
+The CLI accepts JSON files with document arrays:
 
-All cases require you to prepare documentation in text format that is going to
-be chunked and map to embeddings generated using the model:
+```json
+[
+  {
+    "title": "Document 1",
+    "content": "Document content here...",
+    "url": "https://example.com/doc1"
+  }
+]
+```
 
-1. Download the embedding model
-([sentence-transformers/all-mpnet-base-v2](https://huggingface.co/sentence-transformers/all-mpnet-base-v2))
-from HuggingFace as follows:
+Supported keys:
+- **Content**: `content`, `text`, `body`
+- **Title**: `title`, `name`
+- **URL**: `url`, `link`
 
-    ```bash
-   mkdir ./embeddings_model
-   uv run python ./scripts/download_embeddings_model.py -l ./embeddings_model/ -r sentence-transformers/all-mpnet-base-v2
-    ```
+## Advanced Usage
 
-2. Prepare dummy documentation:
+### Custom Python Scripts
 
-   ```bash
-   mkdir -p ./custom_docs/0.1
-   echo "Vector Database is an efficient way how to provide information to LLM" > ./custom_docs/0.1/info.txt
-   ```
+For advanced use cases requiring custom metadata processing or complex workflows, you can use the Python library directly.
 
-3. Prepare a custom script (`./custom_processor.py`) for populating the vector
-database. We provide an example of how such a script might look like using the
-`lightspeed_rag_content` library. Note that in your case the script will be
-different:
+#### Installing the Python Library
 
-    ```python
-    from lightspeed_rag_content.metadata_processor import MetadataProcessor
-    from lightspeed_rag_content.document_processor import DocumentProcessor
-    from lightspeed_rag_content import utils
+The `lightspeed_rag_content` library can be installed:
+- In the [container image](#via-container-image) or
+- Via [uv](#via-uv)
 
-    class CustomMetadataProcessor(MetadataProcessor):
+#### Via uv
 
-        def __init__(self, url, hermetic_build=False):
-            super().__init__(hermetic_build=hermetic_build)
-            self.url = url
+```bash
+uv sync
+uv run python -c "import lightspeed_rag_content; print(lightspeed_rag_content.__name__)"
+```
 
-        def url_function(self, file_path: str) -> str:
-            # Return a URL for the file, so it can be referenced when used
-            # in an answer. This is used as a fallback when the file does not
-            # contain a `url` field in its YAML frontmatter.
-            return self.url
+#### Custom Script Example
 
-    if __name__ == "__main__":
-        parser = utils.get_common_arg_parser()
-        args = parser.parse_args()
+Create a custom processor (`./custom_processor.py`):
 
-        # Instantiate custom Metadata Processor
-        metadata_processor = CustomMetadataProcessor("https://www.redhat.com")
+```python
+from lightspeed_rag_content.metadata_processor import MetadataProcessor
+from lightspeed_rag_content.document_processor import DocumentProcessor
+from lightspeed_rag_content import utils
 
-        # Instantiate Document Processor
-        document_processor = DocumentProcessor(
-            chunk_size=args.chunk,
-            chunk_overlap=args.overlap,
-            model_name=args.model_name,
-            embeddings_model_dir=args.model_dir,
-            num_workers=args.workers,
-            vector_store_type=args.vector_store_type,
-        )
+class CustomMetadataProcessor(MetadataProcessor):
 
-        # Load and embed the documents, this method can be called multiple times
-        # for different sets of documents
-        document_processor.process(args.folder, metadata=metadata_processor)
+    def __init__(self, url, hermetic_build=False):
+        super().__init__(hermetic_build=hermetic_build)
+        self.url = url
 
-        # Save the new vector database to the output directory
-        document_processor.save(args.index, args.output)
-    ```
+    def url_function(self, file_path: str) -> str:
+        # Return a URL for the file
+        return self.url
+
+if __name__ == "__main__":
+    parser = utils.get_common_arg_parser()
+    args = parser.parse_args()
+
+    # Instantiate custom Metadata Processor
+    metadata_processor = CustomMetadataProcessor("https://www.redhat.com")
+
+    # Instantiate Document Processor
+    document_processor = DocumentProcessor(
+        chunk_size=args.chunk,
+        chunk_overlap=args.overlap,
+        model_name=args.model_name,
+        embeddings_model_dir=args.model_dir,
+        num_workers=args.workers,
+        vector_store_type=args.vector_store_type,
+    )
+
+    # Load and embed the documents
+    document_processor.process(args.folder, metadata=metadata_processor)
+
+    # Save the vector database
+    document_processor.save(args.index, args.output)
+```
+
+Run the custom script:
+
+```bash
+uv run ./custom_processor.py -o ./vector_db -f ./docs -md embeddings_model/ \
+    -mn sentence-transformers/all-mpnet-base-v2 -i my-index
+```
 
 ### YAML Frontmatter Support
 
-Markdown files can include a YAML frontmatter block at the top to provide
-per-document metadata. The `MetadataProcessor` recognises two fields:
-
-| Field   | Description                                                      |
-|---------|------------------------------------------------------------------|
-| `title` | Document title. Overrides extraction from the first heading line. |
-| `url`   | Document URL. Takes priority over the value returned by `url_function`. |
-
-Example markdown file with frontmatter:
+Markdown files can include YAML frontmatter for per-document metadata:
 
 ```markdown
 ---
@@ -181,335 +212,179 @@ title: My Custom Page Title
 url: https://docs.example.com/my-page
 ---
 
-# Ignored heading when frontmatter is present
+# Content heading
 
-Content of the document...
+Document content...
 ```
 
-When a file starts with `---`, the processor reads `title` and `url` directly
-from the frontmatter block. If neither field is present, the processor falls
-back to its default behaviour (first-line heading for the title, `url_function`
-for the URL).
+Supported frontmatter fields:
+- `title`: Document title (overrides extraction from first heading)
+- `url`: Document URL (takes priority over `url_function`)
 
-#### Hermetic Builds
+### Hermetic Builds
 
-`MetadataProcessor` accepts a `hermetic_build` flag that disables URL
-reachability checks. This is useful for offline or CI environments where
-outbound network access is restricted:
+For offline/air-gapped environments, use the `--hermetic` flag to disable URL reachability checks:
+
+```bash
+lightspeed-rag --input ./docs --output ./output --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --hermetic
+```
+
+Or in Python:
 
 ```python
 metadata_processor = CustomMetadataProcessor(hermetic_build=True)
 ```
 
-When `hermetic_build=True`, `ping_url` is never called and `url_reachable` is
-always reported as `True` in the resulting metadata.
+## Vector Store Types
 
-### Faiss Vector Store
-
-Generate the documentation using the script from the previous section
-([Generating the Vector Database](#generating-the-vector-database)):
+### Llama-Index Faiss Vector Store
 
 ```bash
-uv run ./custom_processor.py -o ./vector_db/custom_docs/0.1 -f ./custom_docs/0.1/ -md embeddings_model/ -mn sentence-transformers/all-mpnet-base-v2 -i custom_docs-0_1
+lightspeed-rag --input ./docs --output ./vector_db --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --vector-store-type faiss
 ```
 
-Once the command is done, you can find the vector database at `./vector_db`, the
-embedding model at `./embeddings_model`, and the Index ID set to `custom-docs-0_1`.
+### Llama-Index Postgres (PGVector) Vector Store
 
+Start PostgreSQL with pgvector:
 
-### Postgres (PGVector) Vector Store
+```bash
+make start-postgres
+```
 
-To generate a vector database stored in Postgres (PGVector), run the following
-commands:
+Generate the vector store:
 
-1. Start Postgres with the pgvector extension by running:
-
-    ```bash
-    make start-postgres-debug
-    ```
-
-    The `data` folder of Postgres is created at `./postgresql/data`. This command
-    also creates `./output` for the output directory, in which the metadata is saved.
-
-2. Run:
-
-    ```bash
-    POSTGRES_USER=postgres \
-    POSTGRES_PASSWORD=somesecret \
-    POSTGRES_HOST=localhost \
-    POSTGRES_PORT=15432 \
-    POSTGRES_DATABASE=postgres \
-    uv run python ./custom_processor.py \
-     -o ./output \
-     -f custom_docs/0.1/ \
-     -md embeddings_model/ \
-     -mn sentence-transformers/all-mpnet-base-v2 \
-     -i custom_docs-0_1 \
-     --vector-store-type postgres
-    ```
-
-    Which generates embeddings on PostgreSQL, which can be used for RAG, and
-    `metadata.json` in `./output`. Generated embeddings are stored in the
-    `data_table_name` table.
-
-    ```bash
-    $ podman exec -it pgvector bash
-    $ psql -U postgres
-    psql (16.4 (Debian 16.4-1.pgdg120+2))
-    Type "help" for help.
-
-    postgres=# \dt
-                     List of relations
-     Schema |          Name          | Type  |  Owner
-    --------+------------------------+-------+----------
-     public | data_table_name        | table | postgres
-    (1 row)
-    ```
-
-### Llama-Stack Vector Stores
-
-#### Important: Embedding Model Path Portability
-
-When using Llama-Stack vector stores (Faiss or SQLite-vec), the embedding model path
-specified via the `-md` (or `--model-dir`) parameter is written into the generated
-`llama-stack.yaml` configuration file as an absolute path. This path is also registered
-in the llama-stack kv_store database.
-
-When llama-stack later consumes the vector database, it reads the embedding model
-location from the kv_store. Therefore, **the embedding model must be available at the
-exact same path** that was specified during database creation.
-
-**Recommendation:**
-- Use absolute paths for the `-md` parameter to avoid ambiguity
-  (e.g., `-md /app/embeddings` instead of `-md embeddings_model`).
-- Alternatively, set `-md ''` (empty string) and use only the `-mn` flag with a
-  HuggingFace model ID (e.g., `-md "" -mn sentence-transformers/all-mpnet-base-v2`).
-  Setting `-md` to empty forces the tool to use the HuggingFace model ID instead of
-  checking for a local directory. This allows llama-stack to download the model from
-  HuggingFace automatically, making the vector database fully portable without path
-  dependencies.
+```bash
+POSTGRES_USER=postgres \
+POSTGRES_PASSWORD=somesecret \
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=15432 \
+POSTGRES_DATABASE=postgres \
+lightspeed-rag --input ./docs --output ./output --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --vector-store-type postgres
+```
 
 ### Llama-Stack Faiss
 
-> [!IMPORTANT]
-> When using the `--auto-chunking` flag, chunking happens within llama-stack using the
-> OpenAI-compatible Files API. This makes vector stores significantly larger than manual
-> chunking because the Files API stores a redundant copy of the embeddings. 
-> Manual chunking results in smaller database files.
-
-The process is basically the same as in the
-[Llama-Index Faiss Vector Store](#faiss-vector-store) but passing the
-`--vector-store-type` parameter; so you generate the documentation using the
-`custom_processor.py` script from earlier section
- ([Generating the Vector Database](#generating-the-vector-database)):
-
 ```bash
-uv run ./custom_processor.py \
-  -o ./vector_db/custom_docs/0.1 \
-  -f ./custom_docs/0.1/ \
-  -md embeddings_model/ \
-  -mn sentence-transformers/all-mpnet-base-v2 \
-  -i custom_docs-0_1 \
-  --vector-store-type=llamastack-faiss
+lightspeed-rag --input ./docs --output ./vector_db --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --vector-store-type llamastack-faiss
 ```
 
-Once the command is done, you can find the vector database (embedded with the registry metadata) at
-`./vector_db/custom_docs/0.1` with the name `faiss_store.db` as well as a
-barebones llama-stack configuration file named `llama-stack.yaml` for
-reference, since it's not necessary for the final deployment.
-
-The vector-io will be named `custom-docs-0_1`:
-
-```yaml
-providers:
- vector_io:
-   - provider_id: custom-docs-0_1
-     provider_type: inline::faiss
-     config:
-       kvstore:
-         type: sqlite
-         namespace: null
-         db_path: /home/<user>/rag-content/vector_db/custom_docs/0.1/faiss_store.db
+Output structure:
+```
+vector_db/
+└── faiss_store.db       # Vector store + registry metadata
+└── llama-stack.yaml     # Reference configuration
 ```
 
-Once we have a database we can use script `query_rag.py` to check some results:
+Query the database:
 
 ```bash
-python scripts/query_rag.py \
-  -p vector_db/custom_docs/0.1 \
-  -x custom-docs-0_1 \
-  -m embeddings_model \
-  -k 5 \
-  -q "how can I configure a cinder backend"
+python scripts/query_rag.py -p vector_db -x my-index -m embeddings_model \
+    -k 5 -q "your query here"
 ```
 
 ### Llama-Stack SQLite-vec
 
-The process is the same as in the
-[Llama-Stack Faiss](#llama-stack-faiss) but passing a different value on the
-`--vector-store-type` parameter; so you generate the documentation using the
-`custom_processor.py` script from earlier section
- ([Generating the Vector Database](#generating-the-vector-database)):
+```bash
+lightspeed-rag --input ./docs --output ./vector_db --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --vector-store-type llamastack-sqlite-vec
+```
+
+### Llama-Stack Postgres (PGVector)
 
 ```bash
-uv run ./custom_processor.py \
-  -o ./vector_db/custom_docs/0.1 \
-  -f ./custom_docs/0.1/ \
-  -md embeddings_model/ \
-  -mn sentence-transformers/all-mpnet-base-v2 \
-  -i custom_docs-0_1 \
-  --vector-store-type=llamastack-sqlite-vec
+make start-postgres
+
+POSTGRES_USER=postgres \
+POSTGRES_PASSWORD=somesecret \
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=15432 \
+POSTGRES_DATABASE=postgres \
+lightspeed-rag --input ./docs --output ./output --index-id my-index \
+    --model sentence-transformers/all-mpnet-base-v2 --vector-store-type llamastack-pgvector
 ```
 
-Once the command is done, you can find the vector database at
-`./vector_db/custom_docs/0.1` with the name `sqlitevec_store.db` as well as a
-barebones llama-stack configuration file named `llama-stack.yaml` for
-reference, since it's not necessary for the final deployment.
+### Important: Embedding Model Path Portability
 
-The vector-io will be named `custom-docs-0_1`:
+When using Llama-Stack vector stores, the embedding model path is written to the configuration as an absolute path. The model must be available at the same path when llama-stack consumes the database.
 
-```yaml
-providers:
- vector_io:
-   - provider_id: custom-docs-0_1
-     provider_type: inline::sqlite-vec
-     config:
-       db_path: /home/<user>/rag-content/vector_db/custom_docs/0.1/sqlitevec_store.db
-```
+**Recommendations:**
+- Use absolute paths: `-m /app/embeddings`
+- Or use HuggingFace IDs: `--model-dir "" -m sentence-transformers/all-mpnet-base-v2`
 
-Once we have a database we can use script `query_rag.py` to check some results:
+## Building Container Images Locally
+
+Build the CPU variant:
 
 ```bash
-python scripts/query_rag.py \
-  -p vector_db/custom_docs/0.1 \
-  -x custom-docs-0_1 \
-  -m embeddings_model \
-  -k 5 \
-  -q "how can I configure a cinder backend"
-```
-### Llama-Stack Postgres (PGVector) Vector Store
-
-To generate a vector database stored in Postgres (PGVector) for Llama-Stack, run the following
-commands:
-
-1. Start Postgres with the pgvector extension by running:
-
-    ```bash
-    make start-postgres-debug
-    ```
-
-    The `data` folder of Postgres is created at `./postgresql/data`. Note that this command
-    also creates `./output`, which is not used for the Llama-Stack version while it is used for Llama-Index version.
-
-2. Run:
-
-    ```bash
-    POSTGRES_USER=postgres \
-    POSTGRES_PASSWORD=somesecret \
-    POSTGRES_HOST=localhost \
-    POSTGRES_PORT=15432 \
-    POSTGRES_DATABASE=postgres \
-    uv run python ./custom_processor.py \
-     -o ./output \
-     -f custom_docs/0.1/ \
-     -md embeddings_model/ \
-     -mn sentence-transformers/all-mpnet-base-v2 \
-     -i custom_docs-0_1 \
-     --vector-store-type llamastack-pgvector
-    ```
-
-    Which generates embeddings on PostgreSQL, which can be used for RAG.
-
-3. When you run `query_rag.py` to check some results, specify these environment variables for database access:
-
-   ```bash
-    POSTGRES_USER=postgres \
-    POSTGRES_PASSWORD=somesecret \
-    POSTGRES_HOST=localhost \
-    POSTGRES_PORT=15432 \
-    POSTGRES_DATABASE=postgres \
-    uv run python scripts/query_rag.py \
-    -p vector_db/custom_docs/0.1 \
-    -x custom-docs-0_1 \
-    -m embeddings_model \
-    -k 5 \
-    -q "how can I configure a cinder backend"
-   ```
-## Update lockfiles
-
-The lock file is used in this repository:
-
-```
-uv.lock
+podman build -t localhost/lightspeed-rag-content-cpu:latest -f Containerfile .
 ```
 
-The lock file needs to be regenerated when new updates (dependencies) are available. Use
-following commands in order to do it:
+Build the GPU variant:
 
+```bash
+podman build -t localhost/lightspeed-rag-content-gpu:latest -f Containerfile-gpu .
 ```
+
+Test the built image:
+
+```bash
+podman run --rm localhost/lightspeed-rag-content-cpu:latest --help
+```
+
+## Development
+
+### Running Tests
+
+```bash
+make test-unit
+```
+
+### Code Quality
+
+```bash
+make check-format
+make check-types
+make check-code-metrics
+```
+
+### Updating Dependencies
+
+Update lock file when dependencies change:
+
+```bash
 uv lock --upgrade
 uv sync
 ```
 
-## Updating Dependencies for Hermetic Builds
+For hermetic builds (Konflux):
 
-Konflux builds run in **hermetic mode** (air-gapped from the internet), so all dependencies must be prefetched and locked. When you add or update dependencies, you need to regenerate the lock files.
-
-### When to Update Dependency Files
-
-Update these files when you:
-- Add/remove/update Python packages in the project
-- Add/remove/update RPM packages in the Containerfile
-- Change the base image version
-
-### Updating Python Dependencies
-
-**Quick command:**
-```shell
+```bash
+# Update Python dependencies
 make konflux-requirements
-```
 
-This compiles Python dependencies from `pyproject.toml` using `uv`, splits packages by their source index (PyPI vs Red Hat's internal registry), and generates hermetic requirements files with pinned versions and hashes for Konflux builds.
-
-**Files produced:**
-- `requirements.hashes.source.txt` – PyPI packages with hashes
-- `requirements.hashes.wheel.txt` – Red Hat registry packages with hashes
-- `requirements.hashes.wheel.pypi.txt` - PyPI wheels packages with hashes
-- `requirements-build.txt` – Build-time dependencies for source packages
-
-The script also updates the Tekton pipeline configurations (`.tekton/lightspeed-stack-*.yaml`) with the list of pre-built wheel packages.
-
-### Updating RPM Dependencies
-
-**Prerequisites:**
-- Install [rpm-lockfile-prototype](https://github.com/konflux-ci/rpm-lockfile-prototype?tab=readme-ov-file#installation)
-- Have an active RHEL Subscription, get activation keys from [RH console](https://console.redhat.com/insights/connector/activation-keys)
-- Have `dnf` installed in system
-
-**Steps:**
-
-1. **List your RPM packages** in `rpms.in.yaml` under the `packages` field
-
-2. **If you changed the base image**, extract its repo file:
-```shell
-# UBI images
-podman run -it $BASE_IMAGE cat /etc/yum.repos.d/ubi.repo > ubi.repo
-# RHEL images, the current base image.
-podman run -it $BASE_IMAGE cat /etc/yum.repos.d/redhat.repo > redhat.repo
-```
-If the repo file contains too many entries, we can filter them and keep only required repositories.
-Here is the command to check active repositories:
-```shell
-dnf repolist
-```
-Replace the architecture tag (`uname -m`) to `$basearch` so that rpm-lockfile-prototype can replace it with requested architecture names.
-```shell
-sed -i "s/$(uname -m)/\$basearch/g" redhat.repo
-```
-
-1. **Generate the lock file**:
-```shell
+# Update RPM dependencies
 make konflux-rpm-lock
 ```
 
-This creates `rpms.lock.yaml` with pinned RPM versions.
+## Legacy Scripts
+
+The repository includes legacy scripts in `scripts/` for backward compatibility:
+
+- `scripts/generate_embeddings.py` - Original embedding generation script
+- `scripts/query_rag.py` - Query vector stores
+- `scripts/download_embeddings_model.py` - Download embedding models
+
+These scripts are maintained for compatibility but **the CLI is the recommended approach** for new projects.
+
+## License
+
+Apache License 2.0 - See LICENSE file for details
+
+## Support
+
+- **Issues**: https://github.com/lightspeed-core/rag-content/issues
+- **Documentation**: https://github.com/lightspeed-core/rag-content

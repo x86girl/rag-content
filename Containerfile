@@ -68,8 +68,9 @@ RUN groupadd -r rag -g 1000 && \
 # Run as non-root user
 USER 1000
 
-# Reset the entrypoint.
-ENTRYPOINT []
+# Set CLI as the default command
+ENTRYPOINT ["lightspeed-rag"]
+CMD ["--help"]
 
 LABEL vendor="Red Hat, Inc." \
     name="lightspeed-core/rag-tool-rhel9" \

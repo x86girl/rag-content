@@ -1,10 +1,11 @@
-r"""Utility script for generating a vector database from Markdown files.
+r"""Legacy utility script for generating a vector database from Markdown files.
 
-Provides a ready-made CLI so that users do not need to write a custom
-Python script to drive the embedding pipeline.  The default settings
-match the prebuilt CPU image defaults; override them with the flags below.
+**DEPRECATED**: This script is maintained for backward compatibility only.
+For new projects, use the main CLI instead:
 
-Usage::
+    lightspeed-rag --input /input --output /output --index-id my-index
+
+Legacy usage (still supported)::
 
     python generate_embeddings.py -f /input -o /output -i my-index
 
@@ -83,6 +84,13 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Run the embedding pipeline using CLI arguments."""
+    import sys
+    print(
+        "WARNING: This script is deprecated. Use 'lightspeed-rag' CLI instead.",
+        file=sys.stderr,
+    )
+    print("See: https://github.com/lightspeed-core/rag-content#quick-start-with-cli\n", file=sys.stderr)
+
     args = _parse_args()
 
     metadata_processor = DefaultMetadataProcessor()
