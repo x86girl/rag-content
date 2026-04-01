@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from lightspeed_rag_content.document_processor import DocumentProcessor
-from lightspeed_rag_content.metadata_processor import MetadataProcessor
+from lightspeed_rag_content.metadata_processor import DefaultMetadataProcessor
 
 
 class SimpleCLI:
@@ -347,7 +347,7 @@ For more information, visit: https://github.com/lightspeed-core/rag-content
         try:
             # Create metadata processor
             self._info("Initializing metadata processor...")
-            metadata_processor = MetadataProcessor(hermetic_build=args.hermetic)
+            metadata_processor = DefaultMetadataProcessor(hermetic_build=args.hermetic)
 
             # Create document processor
             self._info("Initializing document processor...")

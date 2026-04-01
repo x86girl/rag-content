@@ -56,7 +56,10 @@ dependencies = [
     "aiosqlite>=0.21.0",
     "sqlite-vec>=0.1.6",
     "tomlkit",
-    "chardet>=5.2.0",
+    # Pin requests and dependencies to avoid version conflicts
+    "requests>=2.32.0,<2.33.0",
+    "urllib3>=2.0.0,<3.0.0",
+    "charset-normalizer>=3.0.0,<4.0.0",
     "hf-xet>=1.2.0",
     "einops>=0.8.1",
     # For HTML to Markdown conversion in BYOK workflows
