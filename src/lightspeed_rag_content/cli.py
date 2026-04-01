@@ -394,10 +394,20 @@ For more information, visit: https://github.com/lightspeed-core/rag-content
             print("=" * 80)
 
         except Exception as e:
+            import traceback
+
+            # Always show the error message
+            error_msg = str(e) if str(e) else repr(e)
+
             if args.verbose:
-                import traceback
+                # Show full stack trace in verbose mode
+                print("\n" + "=" * 80, file=sys.stderr)
+                print("FULL ERROR TRACEBACK:", file=sys.stderr)
+                print("=" * 80, file=sys.stderr)
                 traceback.print_exc()
-            self._error(f"Failed to create vector store: {e}")
+                print("=" * 80 + "\n", file=sys.stderr)
+
+            self._error(f"Failed to create vector store: {error_msg}")
 
         finally:
             # Clean up temporary markdown files created from JSON input
